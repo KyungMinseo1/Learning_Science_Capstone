@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+neo4j
+chromadb
+sentence-transformers
+pydantic-settings
+ollama
+openai
+python-dotenv
+python-jose[cryptography]
+passlib[bcrypt]
+bcrypt
+python-multipart

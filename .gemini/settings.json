@@ -1,0 +1,26 @@
+{
+  "mcpServers": {
+    "serena": {
+      "command": "uvx",
+      "args": [
+            "-p", "3.13",
+            "--from", "git+https://github.com/oraios/serena",
+            "serena", "start-mcp-server",
+            "--context", "ide",
+            "--project-from-cwd"
+        ]
+    },
+    "arxiv-mcp-server": {
+        "command": "uv",
+        "args": [
+            "tool",
+            "run",
+            "arxiv-mcp-server",
+            "--storage-path", "/arxiv-mcp-papers"
+        ]
+    }
+  },
+  "experimental": {
+    "enableAgents": true
+  }
+}
