@@ -5,12 +5,16 @@ import { Plus, Brain, Database, Link as LinkIcon } from 'lucide-react';
 const HomePage = () => {
   const [stats, setStats] = useState({ paperCount: 0, linkCount: 0, username: '' });
   const [title, setTitle] = useState('');
+  const [categories, setCategories] = useState('');
+  const [manualKeywords, setManualKeywords] = useState([{ keyword: '', importance: '' }]);
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [categoryOptions, setCategoryOptions] = useState([]);
 
   useEffect(() => {
     fetchStats();
+    fetchCategoryOptions();
   }, []);
 
   const fetchStats = async () => {
@@ -22,16 +26,58 @@ const HomePage = () => {
     }
   };
 
+  const fetchCategoryOptions = async () => {
+    try {
+      const res = await axios.get('/api/user/categories');
+      setCategoryOptions(res.data?.categories || []);
+    } catch (err) {
+      console.error('Failed to fetch categories', err);
+    }
+  };
+
+  const normalizeManualKeywords = () => {
+    return manualKeywords
+      .map((item) => ({
+        keyword: (item.keyword || '').trim(),
+        importance: item.importance === '' || item.importance === null || item.importance === undefined ? '' : Number(item.importance),
+      }))
+      .filter((item) => item.keyword)
+      .slice(0, 5);
+  };
+
+  const addKeywordRow = () => {
+    setManualKeywords((prev) => (prev.length >= 5 ? prev : [...prev, { keyword: '', importance: '' }]));
+  };
+
+  const updateKeywordRow = (index, field, value) => {
+    setManualKeywords((prev) => prev.map((item, itemIndex) => (itemIndex === index ? { ...item, [field]: value } : item)));
+  };
+
+  const removeKeywordRow = (index) => {
+    setManualKeywords((prev) => (prev.length === 1 ? prev : prev.filter((_, itemIndex) => itemIndex !== index)));
+  };
+
   const handleUpload = async (e) => {
     e.preventDefault();
     setLoading(true);
     setMessage('');
     try {
-      await axios.post('/api/papers', { title, text });
+      const payload = {
+        title,
+        text,
+        categories: categories.split(',').map((item) => item.trim()).filter(Boolean).slice(0, 10),
+        manual_keywords: normalizeManualKeywords().map((item) => ({ keyword: item.keyword, importance: item.importance === '' ? 1.0 : item.importance })),
+        manual_keyword_importance: normalizeManualKeywords().map((item) => item.importance === '' ? 1.0 : item.importance),
+      };
+
+      await axios.post('/api/papers', payload);
       setTitle('');
+      setCategories('');
+      setManualKeywords([{ keyword: '', importance: '' }]);
       setText('');
       setMessage('Paper uploaded and analyzed successfully!');
       fetchStats();
+      fetchCategoryOptions();
     } catch (err) {
       setMessage('Failed to upload paper');
     } finally {
@@ -88,14 +134,66 @@ const HomePage = () => {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Content (Abstract/Full Text)</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Categories</label>
+            <input
+              className="w-full p-3 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Type one or more categories separated by commas"
+              list="category-options"
+              value={categories}
+              onChange={(e) => setCategories(e.target.value)}
+            />
+            <datalist id="category-options">
+              {categoryOptions.map((category) => (
+                <option key={category} value={category} />
+              ))}
+            </datalist>
+            <p className="text-xs text-slate-500 mt-2">You can reuse existing categories or create new ones. Multiple categories are supported.</p>
+          </div>
+          <div>
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <label className="block text-sm font-medium text-slate-700">Manual Keywords</label>
+              <button type="button" onClick={addKeywordRow} className="text-xs font-semibold text-blue-600 hover:text-blue-700">Add keyword</button>
+            </div>
+            <div className="space-y-3">
+              {manualKeywords.map((item, index) => (
+                <div key={index} className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_160px_auto] gap-3">
+                  <input
+                    className="w-full p-3 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Keyword"
+                    value={item.keyword}
+                    onChange={(e) => updateKeywordRow(index, 'keyword', e.target.value)}
+                  />
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="1"
+                    className="w-full p-3 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Importance"
+                    value={item.importance}
+                    onChange={(e) => updateKeywordRow(index, 'importance', e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeKeywordRow(index)}
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-slate-500 mt-2">Enter up to 5 keyword/importance pairs. The AI will generate the remaining keywords after these are excluded.</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Content (Optional)</label>
             <textarea 
               className="w-full p-3 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 h-48"
-              placeholder="Paste the paper content here for AI analysis..."
+              placeholder="Paste the paper content here if you want to help keyword extraction..."
               value={text}
               onChange={(e) => setText(e.target.value)}
-              required
             />
+            <p className="text-xs text-slate-500 mt-2">Title is required. If content is omitted, Semantic Scholar metadata will be used as the summary source when available.</p>
           </div>
           <button 
             type="submit"

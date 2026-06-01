@@ -11,3 +11,5 @@ python-jose[cryptography]
 passlib[bcrypt]
 bcrypt
 python-multipart
+pydantic[email]
+numpy

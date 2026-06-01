@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
-import { Home, Share2, Settings, LogOut, BookOpen } from 'lucide-react';
+import { Home, Network, Share2, Settings, LogOut, BookOpen } from 'lucide-react';
 
 const Layout = ({ children }) => {
   const { logout, user } = useAuth();
@@ -15,7 +15,8 @@ const Layout = ({ children }) => {
 
   const menuItems = [
     { name: 'Dashboard', path: '/', icon: <Home size={20} /> },
-    { name: 'Knowledge Graph', path: '/graph', icon: <Share2 size={20} /> },
+    { name: 'Knowledge Graph', path: '/graph', icon: <Network size={20} /> },
+    { name: 'Recommendations', path: '/recommendations', icon: <Share2 size={20} /> },
     { name: 'Settings', path: '/settings', icon: <Settings size={20} /> },
   ];
 

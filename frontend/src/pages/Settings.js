@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Save, Cpu, Cloud, Bell } from 'lucide-react';
+import { Save, Cpu, Cloud, Bell, Sparkles } from 'lucide-react';
 
 const SettingsPage = () => {
-  const [settings, setSettings] = useState({ ai_provider: 'openai', quiz_frequency: 3 });
+  const [settings, setSettings] = useState({ ai_provider: 'openai', quiz_frequency: 3, ai_edge_threshold: 0.35, final_k: 10 });
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -25,6 +25,7 @@ const SettingsPage = () => {
     setMessage('');
     try {
       await axios.post('/api/user/settings', settings);
+      window.dispatchEvent(new CustomEvent('app-settings-updated', { detail: settings }));
       setMessage('Settings updated successfully!');
     } catch (err) {
       setMessage('Failed to update settings');
@@ -47,9 +48,9 @@ const SettingsPage = () => {
             <Cpu className="text-blue-600" />
             <h2 className="text-lg font-bold text-slate-900">AI Intelligence Mode</h2>
           </div>
-          
-          <div className="grid grid-cols-2 gap-4">
-            <button 
+
+          <div className="grid grid-cols-3 gap-4">
+            <button
               onClick={() => setSettings({...settings, ai_provider: 'openai'})}
               className={`p-4 rounded-xl border-2 text-left transition-all ${settings.ai_provider === 'openai' ? 'border-blue-600 bg-blue-50' : 'border-slate-100 hover:border-slate-200'}`}
             >
@@ -61,7 +62,7 @@ const SettingsPage = () => {
               <p className="text-xs text-slate-500 mt-1">Highest accuracy, requires internet & API key.</p>
             </button>
 
-            <button 
+            <button
               onClick={() => setSettings({...settings, ai_provider: 'ollama'})}
               className={`p-4 rounded-xl border-2 text-left transition-all ${settings.ai_provider === 'ollama' ? 'border-blue-600 bg-blue-50' : 'border-slate-100 hover:border-slate-200'}`}
             >
@@ -72,6 +73,18 @@ const SettingsPage = () => {
               <p className="font-bold text-slate-900">Ollama (Local SLM)</p>
               <p className="text-xs text-slate-500 mt-1">Full privacy, runs on your machine.</p>
             </button>
+
+            <button
+              onClick={() => setSettings({...settings, ai_provider: 'gemini'})}
+              className={`p-4 rounded-xl border-2 text-left transition-all ${settings.ai_provider === 'gemini' ? 'border-blue-600 bg-blue-50' : 'border-slate-100 hover:border-slate-200'}`}
+            >
+              <div className="flex justify-between items-start mb-2">
+                <Sparkles className={settings.ai_provider === 'gemini' ? 'text-blue-600' : 'text-slate-400'} />
+                {settings.ai_provider === 'gemini' && <div className="w-4 h-4 bg-blue-600 rounded-full flex items-center justify-center text-[10px] text-white">✓</div>}
+              </div>
+              <p className="font-bold text-slate-900">Gemini (Google)</p>
+              <p className="text-xs text-slate-500 mt-1">Fast cloud model, needs a Google API key.</p>
+            </button>
           </div>
         </div>
 
@@ -81,17 +94,53 @@ const SettingsPage = () => {
             <Bell className="text-blue-600" />
             <h2 className="text-lg font-bold text-slate-900">Consolidation Strategy</h2>
           </div>
-          
+
           <div className="space-y-4">
             <label className="block">
               <span className="text-sm font-medium text-slate-700">Quiz Frequency (papers per quiz)</span>
-              <input 
+              <input
                 type="number"
                 className="mt-1 w-full p-3 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
                 value={settings.quiz_frequency}
                 onChange={(e) => setSettings({...settings, quiz_frequency: parseInt(e.target.value)})}
               />
               <p className="text-xs text-slate-500 mt-2 italic">* Note: Memory consolidation only starts after 5 papers are integrated.</p>
+            </label>
+
+            <label className="block">
+              <span className="text-sm font-medium text-slate-700">Recommendation Count (final_k)</span>
+              <input
+                type="number"
+                min="1"
+                max="50"
+                className="mt-1 w-full p-3 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                value={settings.final_k}
+                onChange={(e) => setSettings({ ...settings, final_k: parseInt(e.target.value || '0', 10) || 1 })}
+              />
+              <p className="text-xs text-slate-500 mt-2 italic">* Controls how many papers are shown in recommendation results.</p>
+            </label>
+
+            <label className="block">
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-sm font-medium text-slate-700">AI Edge Threshold</span>
+                <span className="text-xs font-semibold text-blue-700 bg-blue-50 px-2 py-1 rounded-full">
+                  {(Number(settings.ai_edge_threshold) || 0).toFixed(2)}
+                </span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                className="mt-3 w-full accent-blue-600"
+                style={{ touchAction: 'none', userSelect: 'none' }}
+                value={settings.ai_edge_threshold}
+                onInput={(e) => setSettings({ ...settings, ai_edge_threshold: parseFloat(e.target.value) })}
+                onChange={(e) => setSettings({ ...settings, ai_edge_threshold: parseFloat(e.target.value) })}
+              />
+              <p className="text-xs text-slate-500 mt-2 italic">
+                Higher values show fewer AI links.
+              </p>
             </label>
           </div>
         </div>
@@ -101,7 +150,7 @@ const SettingsPage = () => {
           <p className="text-sm text-slate-500">
             {message && <span className={message.includes('success') ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>{message}</span>}
           </p>
-          <button 
+          <button
             onClick={handleSave}
             disabled={loading}
             className="flex items-center gap-2 bg-slate-900 text-white px-6 py-2 rounded-lg hover:bg-slate-800 transition-colors disabled:bg-slate-400"

@@ -23,7 +23,16 @@ const LoginPage = () => {
       }
       navigate('/');
     } catch (err) {
-      setError(err.response?.data?.detail || 'Authentication failed');
+      const detail = err.response?.data?.detail;
+      const status = err.response?.status;
+
+      if (detail) {
+        setError(detail);
+      } else if (status) {
+        setError(`Request failed (${status})`);
+      } else {
+        setError('Network error: backend is unreachable');
+      }
     }
   };
 

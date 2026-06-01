@@ -6,6 +6,7 @@ import Layout from './components/Layout';
 import LoginPage from './pages/Login';
 import HomePage from './pages/Home';
 import GraphPage from './pages/Graph';
+import RecommendationsPage from './pages/Recommendations';
 import SettingsPage from './pages/Settings';
 
 function App() {
@@ -18,6 +19,7 @@ function App() {
           <Route element={<ProtectedRoute />}>
             <Route path="/" element={<Layout><HomePage /></Layout>} />
             <Route path="/graph" element={<Layout><GraphPage /></Layout>} />
+            <Route path="/recommendations" element={<Layout><RecommendationsPage /></Layout>} />
             <Route path="/settings" element={<Layout><SettingsPage /></Layout>} />
           </Route>
         </Routes>

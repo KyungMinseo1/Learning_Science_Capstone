@@ -9,6 +9,17 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const res = await axios.get('/api/auth/me');
+        setUser(res.data);
+      } catch (err) {
+        logout();
+      } finally {
+        setLoading(false);
+      }
+    };
+
     if (token) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       fetchUser();
@@ -16,17 +27,6 @@ export const AuthProvider = ({ children }) => {
       setLoading(false);
     }
   }, [token]);
-
-  const fetchUser = async () => {
-    try {
-      const res = await axios.get('/api/auth/me');
-      setUser(res.data);
-    } catch (err) {
-      logout();
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const login = async (username, password) => {
     const formData = new FormData();

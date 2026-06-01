@@ -216,3 +216,25 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# dependencies
+node_modules/
+
+# build
+dist/
+build/
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# DB
+/chroma_db
