@@ -5,7 +5,9 @@ import { Plus, Brain, Database, Link as LinkIcon } from 'lucide-react';
 const HomePage = () => {
   const [stats, setStats] = useState({ paperCount: 0, linkCount: 0, username: '' });
   const [title, setTitle] = useState('');
-  const [categories, setCategories] = useState('');
+  const [categories, setCategories] = useState([]);
+  const [categoryInput, setCategoryInput] = useState('');
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [manualKeywords, setManualKeywords] = useState([{ keyword: '', importance: '' }]);
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
@@ -34,6 +36,22 @@ const HomePage = () => {
       console.error('Failed to fetch categories', err);
     }
   };
+
+  const handleCategorySelect = (category) => {
+    if (categories.includes(category)) return;
+    setCategories(prev => [...prev, category]);
+    setCategoryInput('');
+    setShowSuggestions(false);
+  };
+
+  const removeCategory = (cat) => {
+    setCategories(prev => prev.filter(c => c !== cat));
+  };
+
+  const filtered = categoryOptions.filter(c =>
+    !categories.includes(c) &&
+    c.toLowerCase().includes(categoryInput.toLowerCase())
+  );
 
   const normalizeManualKeywords = () => {
     return manualKeywords
@@ -65,14 +83,14 @@ const HomePage = () => {
       const payload = {
         title,
         text,
-        categories: categories.split(',').map((item) => item.trim()).filter(Boolean).slice(0, 10),
+        categories: categories.slice(0, 10),
         manual_keywords: normalizeManualKeywords().map((item) => ({ keyword: item.keyword, importance: item.importance === '' ? 1.0 : item.importance })),
         manual_keyword_importance: normalizeManualKeywords().map((item) => item.importance === '' ? 1.0 : item.importance),
       };
 
       await axios.post('/api/papers', payload);
       setTitle('');
-      setCategories('');
+      setCategories([]);
       setManualKeywords([{ keyword: '', importance: '' }]);
       setText('');
       setMessage('Paper uploaded and analyzed successfully!');
@@ -135,23 +153,56 @@ const HomePage = () => {
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Categories</label>
-            <input
-              className="w-full p-3 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Type one or more categories separated by commas"
-              list="category-options"
-              value={categories}
-              onChange={(e) => setCategories(e.target.value)}
-            />
-            <datalist id="category-options">
-              {categoryOptions.map((category) => (
-                <option key={category} value={category} />
-              ))}
-            </datalist>
+            {categories.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {categories.map((cat) => (
+                  <span key={cat} className="flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
+                    {cat}
+                    <button
+                      type="button"
+                      onClick={() => removeCategory(cat)}
+                      className="text-blue-400 hover:text-blue-700"
+                    >✕</button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="relative">
+              <input
+                className="w-full p-3 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Type or select a category"
+                value={categoryInput}
+                onChange={(e) => { setCategoryInput(e.target.value); setShowSuggestions(true); }}
+                onFocus={() => setShowSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const val = categoryInput.trim();
+                    if (val) handleCategorySelect(val);
+                  }
+                }}
+              />
+              {showSuggestions && filtered.length > 0 && (
+                <div className="absolute z-20 w-full mt-1 rounded-xl border border-slate-200 bg-white shadow-lg max-h-48 overflow-y-auto">
+                  {filtered.map((category) => (
+                    <button
+                      key={category}
+                      type="button"
+                      onMouseDown={() => handleCategorySelect(category)}
+                      className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                    >
+                      {category}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <p className="text-xs text-slate-500 mt-2">You can reuse existing categories or create new ones. Multiple categories are supported.</p>
           </div>
           <div>
             <div className="flex items-center justify-between gap-3 mb-2">
-              <label className="block text-sm font-medium text-slate-700">Manual Keywords</label>
+              <label className="block text-sm font-medium text-slate-700">Manual Keywords (Optional)</label>
               <button type="button" onClick={addKeywordRow} className="text-xs font-semibold text-blue-600 hover:text-blue-700">Add keyword</button>
             </div>
             <div className="space-y-3">

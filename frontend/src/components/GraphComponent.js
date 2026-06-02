@@ -34,6 +34,7 @@ const GraphComponent = ({
 }) => {
   const svgRef = useRef();
   const containerRef = useRef();
+  const detailsRef = useRef(null);
   const [zoomBehavior, setZoomBehavior] = useState(null);
   const [hoverConnection, setHoverConnection] = useState(null);
   const transformRef = useRef(d3.zoomIdentity);
@@ -52,6 +53,11 @@ const GraphComponent = ({
   suggestedNeuronConnectionEnabledRef.current = suggestedNeuronConnectionEnabled;
   highlightedPairKeysRef.current = highlightedPairKeys;
   useEffect(() => { hoverConnectionRef.current = hoverConnection; }, [hoverConnection]);
+
+  const handleCategorySelect = (category) => {
+    onCategoryChange?.(category);
+    if (detailsRef.current) detailsRef.current.open = false;
+  };
 
   const clearHoverConnection = useCallback(() => {
     if (hoverTimerRef.current) {
@@ -482,14 +488,14 @@ const GraphComponent = ({
   return (
     <div ref={containerRef} className="border rounded shadow-lg p-0 bg-white relative h-full">
       <div className="absolute right-4 top-4 z-30 w-40 max-w-[calc(100%-2rem)]">
-        <details className="relative">
-          <summary className="list-none cursor-pointer rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
+        <details ref={detailsRef} className="relative">
+          <summary className="list-none cursor-pointer rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 flex items-center justify-center">
             {selectedCategory || 'Select category'}
           </summary>
           <div className="absolute right-0 mt-2 w-40 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl z-30">
             <button
               type="button"
-              onClick={() => onCategoryChange?.('')}
+              onClick={() => handleCategorySelect('')}
               className="mb-2 w-full rounded-xl border border-dashed border-slate-200 px-3 py-2 text-left text-sm text-slate-500 hover:bg-slate-50"
             >
               Hide graph
@@ -499,7 +505,7 @@ const GraphComponent = ({
                 <button
                   key={category}
                   type="button"
-                  onClick={() => onCategoryChange?.(category)}
+                  onClick={() => handleCategorySelect(category)}
                   className={`w-full rounded-xl px-3 py-2 text-left text-sm transition-colors ${selectedCategory === category ? 'bg-blue-50 text-blue-700' : 'hover:bg-slate-50 text-slate-700'}`}
                 >
                   {category}

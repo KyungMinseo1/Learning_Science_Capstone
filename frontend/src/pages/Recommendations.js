@@ -18,6 +18,7 @@ const Recommendations = () => {
   const [addModal, setAddModal] = useState(null);
   const [addCategories, setAddCategories] = useState('');
   const [manualKeywords, setManualKeywords] = useState([{ keyword: '', importance: '' }]);
+  const [progress, setProgress] = useState(null);
 
   const normalizeKeywords = (value) => {
     if (Array.isArray(value)) return value.filter(Boolean).map((v) => String(v));
@@ -156,21 +157,60 @@ const Recommendations = () => {
     if (!selected.length) return;
     setNotice('');
     setLoading(true);
+    setProgress({ pct: 0, step: 'Starting…' });
+
+    if (selected.length > 1) {
+      setNotice('Dual recommendation is still being implemented.');
+      setLoading(false);
+      setProgress(null);
+      return;
+    }
+
     try {
-      if (selected.length === 1) {
-        const res = await axios.post('/api/recommend/single', {
+      const res = await fetch('/api/recommend/single/stream', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Cache-Control': 'no-cache',
+        },
+        body: JSON.stringify({
           paper_id: selected[0].id,
           final_k: userSettings.final_k || 10,
-        });
-        const candidates = res.data.candidates || [];
-        setResults(candidates);
-        setSelectedResultId(null);
-      } else {
-        setNotice('Dual recommendation is still being implemented.');
+        }),
+      });
+      
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error('No response body');
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const msg = JSON.parse(line.slice(6));
+          if (msg.step === 'done') {
+            setProgress({ pct: 100, step: 'Done!' });
+            setResults(msg.result?.candidates || []);
+            setSelectedResultId(null);
+            setTimeout(() => setProgress(null), 800);
+          } else if (msg.step === 'error') {
+            setNotice('Recommendation failed. Please try again.');
+            setProgress(null);
+          } else {
+            setProgress({ pct: msg.pct, step: msg.step });
+          }
+        }
       }
     } catch (e) {
       console.error('Recommend failed', e);
-      setNotice('추천 실행에 실패했습니다.');
+      setNotice('Recommendation failed. Please try again.');
+      setProgress(null);
     } finally {
       setLoading(false);
     }
@@ -286,40 +326,17 @@ const Recommendations = () => {
       <div className="flex flex-col xl:flex-row gap-6 items-stretch h-full min-h-0" style={{ height: 'min(80vh, 860px)' }}>
         <div className="flex-[1.35] min-w-0 h-full min-h-0">
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden h-full min-h-0 flex items-stretch justify-center">
-            {selectedCategory && graph.nodes.length > 0 ? (
-              <div className="w-full h-full min-h-0">
-                <GraphComponent
-                  data={graph}
-                  onNodeClick={onNodeClick}
-                  selectedNodes={selected}
-                  availableCategories={availableCategories}
-                  selectedCategory={selectedCategory}
-                  onCategoryChange={setSelectedCategory}
-                  height={620}
-                />
-              </div>
-            ) : (
-              <div className="text-center p-8 flex flex-col items-center justify-center gap-3">
-                <p className="text-slate-500 italic">
-                  {selectedCategory
-                    ? 'No nodes yet for this category. Add papers to this category to display its graph.'
-                    : 'Select a category to display its graph.'}
-                </p>
-                {!selectedCategory && availableCategories.length > 0 && (
-                  <div className="flex flex-wrap justify-center gap-2 max-w-xl">
-                    {availableCategories.slice(0, 6).map((category) => (
-                      <button
-                        key={category}
-                        onClick={() => setSelectedCategory(category)}
-                        className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                      >
-                        {category}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+            <div className="w-full h-full min-h-0">
+              <GraphComponent
+                data={graph}
+                onNodeClick={onNodeClick}
+                selectedNodes={selected}
+                availableCategories={availableCategories}
+                selectedCategory={selectedCategory}
+                onCategoryChange={setSelectedCategory}
+                height={620}
+              />
+            </div>
           </div>
         </div>
 
@@ -355,6 +372,17 @@ const Recommendations = () => {
               ) : (
                 <div className="text-sm text-slate-500">
                 Select a node or recommendation to see paper info.
+                </div>
+              )}
+              {progress !== null && (
+                <div className="mt-2">
+                  <p className="text-[10px] text-slate-400 mb-1 truncate">{progress.step}</p>
+                  <div className="h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-blue-500 transition-all duration-500 ease-out"
+                      style={{ width: `${progress.pct}%` }}
+                    />
+                  </div>
                 </div>
               )}
             </div>

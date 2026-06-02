@@ -1,4 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
+import json
 import logging
 import traceback
 from ..services.knowledge_service import knowledge_base_service
@@ -162,16 +164,52 @@ async def delete_paper(paper_id: str, current_user: dict = Depends(get_current_u
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/recommend/single")
-async def recommend_single(data: RecommendSingleRequest, current_user: dict = Depends(get_current_user)):
-    try:
-        prefilter_limit = data.prefilter_limit or 100
-        final_k = data.final_k or 10
-        return knowledge_base_service.recommend_single(current_user["id"], data.paper_id, prefilter_limit, final_k)
-    except Exception as e:
-        logger.error("Error in recommend_single: %s", e)
-        logger.debug(traceback.format_exc())
-        raise HTTPException(status_code=500, detail="Internal server error")
+@router.post("/recommend/single/stream")
+async def recommend_single_stream(data: RecommendSingleRequest, current_user: dict = Depends(get_current_user)):
+    import asyncio
+    loop = asyncio.get_running_loop()
+    queue = asyncio.Queue()
+
+    def progress_cb(step: str, pct: int):
+        logger.info(f"[PROGRESS] {pct}% - {step}")
+        loop.call_soon_threadsafe(queue.put_nowait, {"step": step, "pct": pct})
+
+    async def run():
+        try:
+            result = await asyncio.to_thread(
+                knowledge_base_service.recommend_single,
+                current_user["id"],
+                data.paper_id,
+                data.prefilter_limit or 100,
+                data.final_k or 10,
+                progress_cb,
+            )
+            queue.put_nowait({"step": "done", "pct": 100, "result": result})
+        except Exception as e:
+            queue.put_nowait({"step": "error", "pct": 0, "error": str(e)})
+
+    async def event_generator():
+        asyncio.create_task(run())
+        while True:
+            try:
+                msg = await asyncio.wait_for(queue.get(), timeout=120.0)
+            except asyncio.TimeoutError:
+                yield f"data: {json.dumps({'step': 'error', 'pct': 0, 'error': 'timeout'})}\n\n"
+                break
+            yield f"data: {json.dumps(msg)}\n\n"
+            if msg["step"] in ("done", "error"):
+                break
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+            "Transfer-Encoding": "chunked",
+        }
+    )
 
 
 @router.post("/recommend/dual")

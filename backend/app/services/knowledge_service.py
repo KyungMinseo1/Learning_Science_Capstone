@@ -1059,17 +1059,21 @@ class KnowledgeBaseService:
         }
 
     @staticmethod
-    def recommend_single(user_id: str, paper_id: str, prefilter_limit: int = 100, final_k: int = 5):
+    def recommend_single(user_id: str, paper_id: str, prefilter_limit: int = 100, final_k: int = 5, progress_cb=None):
         """
         Recommend papers for a single anchor paper.
         See: prefilter by metadata, LLM-guided selection, hybrid scoring, persist run.
         """
+        def p(step, pct):
+            if progress_cb: progress_cb(step, pct)
+
         current_year = datetime.now().year
 
         provider = KnowledgeBaseService._get_user_provider(user_id)
 
         with neo4j_client.get_session() as session:
             # Load source paper
+            p("Loading source paper…", 5)
             res = session.run(
                 "MATCH (p:Paper) WHERE p.userId = $user_id AND (p.id = $paper_id OR elementId(p) = $paper_id) RETURN p LIMIT 1",
                 user_id=user_id, paper_id=paper_id,
@@ -1084,6 +1088,7 @@ class KnowledgeBaseService:
             source_summary = src.get("summary") or src.get("abstract") or src.get("tldr") or src.get("title")
 
             # Fetch related SemanticScholarPaper nodes
+            p("Fetching candidates…", 15)
             rels = session.run(
                 "MATCH (p:Paper {id: $paper_id, userId: $user_id})-[:HAS_REFERENCE|HAS_CITATION]->(r:SemanticScholarPaper) RETURN r",
                 paper_id=src.get("id"), user_id=user_id,
@@ -1115,10 +1120,12 @@ class KnowledgeBaseService:
                     })
 
         # Prefilter using simple heuristics
+        p("Prefiltering candidates…", 25)
         candidates = sorted(candidates, key=lambda c: KnowledgeBaseService._prefilter_score_for(c, source_keywords, source_authors, current_year), reverse=True)
         prefiltered = candidates[:max(50, min(prefilter_limit, len(candidates)))]
 
         # Ask LLM to pick top final_k candidates
+        p("AI selecting top candidates…", 40)
         selected_ids = ai_service.select_top_candidates(prefiltered, top_k=final_k, provider=provider)
 
         # Build final detailed candidate list using batched operations:
@@ -1142,6 +1149,7 @@ class KnowledgeBaseService:
                 selected_candidates.append(cand_meta)
 
         # 1) Batch-resolve Semantic Scholar records (if batch API exists, use it)
+        p("Resolving Semantic Scholar records…", 55)
         resolved_records = {}
         titles = [c.get("title") or "" for c in selected_candidates]
         try:
@@ -1168,6 +1176,7 @@ class KnowledgeBaseService:
                     resolved_records[idx] = {}
 
         # 2) Build keyword inputs and request keywords in batch if supported
+        p("Extracting keywords…", 70)
         kw_inputs = []
         for idx, cand in enumerate(selected_candidates):
             rec = resolved_records.get(idx) or {}
@@ -1198,6 +1207,7 @@ class KnowledgeBaseService:
                     kw_results.append({})
 
         # 3) Batch embeddings for candidates (prefer abstract/tldr)
+        p("Computing embeddings…", 82)
         texts_for_embedding = []
         for idx, cand in enumerate(selected_candidates):
             rec = resolved_records.get(idx) or {}
@@ -1222,6 +1232,7 @@ class KnowledgeBaseService:
                     cand_embeddings.append(None)
 
         # 4) Compute vector similarities in batch using numpy for speed
+        p("Scoring & ranking…", 92)
         vec_scores = [0.0] * len(selected_candidates)
         try:
             src_vec = np.array(source_embedding, dtype=np.float32)
@@ -1263,6 +1274,7 @@ class KnowledgeBaseService:
             score = max(0.0, min(1.0, (vector_score * 0.6) + (keyword_score * 0.4)))
 
             # persist semantic scholar paper metadata (but do NOT create a user-owned Paper)
+            p("Saving results…", 97)
             try:
                 with neo4j_client.get_session() as s2:
                     s2.run(
