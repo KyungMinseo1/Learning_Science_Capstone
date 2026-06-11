@@ -13,3 +13,4 @@ bcrypt
 python-multipart
 pydantic[email]
 numpy
+google-genai

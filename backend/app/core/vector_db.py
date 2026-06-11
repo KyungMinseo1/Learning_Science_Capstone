@@ -1,11 +1,18 @@
 import re
-import chromadb
+import chromadb, os
 from chromadb.config import Settings as ChromaSettings
 from .config import settings
 
 class ChromaClient:
     def __init__(self):
-        self.client = chromadb.PersistentClient(path=settings.CHROMA_PATH)
+        host = os.getenv("CHROMA_HOST")
+        if host:
+            self.client = chromadb.HttpClient(
+                host=host, 
+                port=int(os.getenv("CHROMA_PORT", 8000))
+            )
+        else:
+            self.client = chromadb.PersistentClient(path=settings.CHROMA_PATH)
 
     def _sanitize_collection_name(self, user_id: str) -> str:
         # Chroma requires names with characters [a-zA-Z0-9._-], 3-512 chars, start/end with alnum
@@ -31,5 +38,6 @@ class ChromaClient:
         # Use sanitized user-specific collection names
         name = self._sanitize_collection_name(user_id)
         return self.client.get_or_create_collection(name=name)
+    
 
 chroma_client = ChromaClient()
