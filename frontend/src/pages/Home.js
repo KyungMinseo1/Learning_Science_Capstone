@@ -12,6 +12,7 @@ const HomePage = () => {
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [errors, setErrors] = useState({});
   const [categoryOptions, setCategoryOptions] = useState([]);
 
   useEffect(() => {
@@ -77,6 +78,18 @@ const HomePage = () => {
 
   const handleUpload = async (e) => {
     e.preventDefault();
+    setErrors({});
+
+    const newErrors = {};
+
+    if (!title.trim()) newErrors.title = 'Title is required';
+    if (categories.length === 0) newErrors.category = 'Enter at least one category';
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
     setLoading(true);
     setMessage('');
     try {
@@ -148,8 +161,8 @@ const HomePage = () => {
               placeholder="Enter paper title..."
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              required
             />
+            {errors.title && <p className="text-xs text-red-500 mt-1">{errors.title}</p>}
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Categories</label>
@@ -199,6 +212,7 @@ const HomePage = () => {
               )}
             </div>
             <p className="text-xs text-slate-500 mt-2">You can reuse existing categories or create new ones. Multiple categories are supported.</p>
+            {errors.category && <p className="text-xs text-red-500 mt-1">{errors.category}</p>}
           </div>
           <div>
             <div className="flex items-center justify-between gap-3 mb-2">

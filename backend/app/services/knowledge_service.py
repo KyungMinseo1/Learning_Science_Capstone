@@ -1151,28 +1151,46 @@ class KnowledgeBaseService:
         # 1) Batch-resolve Semantic Scholar records (if batch API exists, use it)
         p("Resolving Semantic Scholar records…", 55)
         resolved_records = {}
-        titles = [c.get("title") or "" for c in selected_candidates]
-        try:
-            if hasattr(semantic_scholar_service, "resolve_papers"):
-                batch_res = semantic_scholar_service.resolve_papers(titles)
-                # expect list/dict mapping
-                for idx, rec in enumerate(batch_res or []):
-                    resolved_records[idx] = rec.get("record") if isinstance(rec, dict) else rec
+        candidate_paper_ids = [c.get("paper_id") for c in selected_candidates if c.get("paper_id")]
+        neo4j_cache = {}
+        if candidate_paper_ids:
+            try:
+                with neo4j_client.get_session() as sess:
+                    cache_res = sess.run(
+                        """
+                        UNWIND $paper_ids AS pid
+                        MATCH (r:SemanticScholarPaper {paperId: pid})
+                        RETURN r
+                        """,
+                        paper_ids=candidate_paper_ids,
+                    )
+                    for rec in cache_res:
+                        r = rec["r"]
+                        pid = r.get("paperId")
+                        if pid:
+                            neo4j_cache[pid] = {
+                                "paperId": pid,
+                                "title": r.get("title"),
+                                "year": r.get("year"),
+                                "authors": r.get("authors") or [],
+                                "abstract": r.get("abstract") or "",
+                                "tldr": r.get("tldr") or "",
+                            }
+            except Exception as e:
+                logger.warning("Neo4j cache lookup failed: %s", e)
+        for idx, cand in enumerate(selected_candidates):
+            pid = cand.get("paper_id")
+            cached = neo4j_cache.get(pid)
+
+            if cached and (cached.get("abstract") or cached.get("tldr")):
+                resolved_records[idx] = cached
             else:
-                for idx, t in enumerate(titles):
-                    try:
-                        r = semantic_scholar_service.resolve_paper(t)
-                        resolved_records[idx] = r.get("record") or {}
-                    except Exception:
-                        resolved_records[idx] = {}
-        except Exception:
-            # fallback to per-title resolve
-            resolved_records = {}
-            for idx, t in enumerate(titles):
+                title = cand.get("title") or ""
                 try:
-                    r = semantic_scholar_service.resolve_paper(t)
+                    r = semantic_scholar_service.resolve_paper(title)
                     resolved_records[idx] = r.get("record") or {}
-                except Exception:
+                except Exception as e:
+                    logger.warning("S2 resolve failed for '%s': %s", title, e)
                     resolved_records[idx] = {}
 
         # 2) Build keyword inputs and request keywords in batch if supported

@@ -107,7 +107,7 @@ class SemanticScholarService:
     def search_by_title(self, title: str, limit: int = 3) -> list[dict[str, Any]]:
         data = self._get(
             f"{BASE_URL}/paper/search",
-            {"query": title, "fields": FIELDS_SEARCH, "limit": limit},
+            {"query": title, "fields": FIELDS_DETAIL, "limit": limit},
         )
         return data.get("data", []) or []
 
@@ -121,16 +121,9 @@ class SemanticScholarService:
 
         search_result = candidates[0]
         paper_id = search_result.get("paperId") or search_result.get("paper_id")
-        detail = None
-        if paper_id:
-            try:
-                detail = self.get_paper_detail(paper_id)
-            except Exception as exc:
-                logger.warning("Semantic Scholar detail lookup failed for %s: %s", paper_id, exc)
-
-        source = detail or search_result
-        record = self._build_record(search_result, detail, title)
-        return {"search_result": search_result, "detail": detail, "record": record, "paper_id": paper_id, "source": source}
+        
+        record = self._build_record(search_result, None, title)
+        return {"search_result": search_result, "detail": search_result, "record": record, "paper_id": paper_id, "source": search_result}
 
     def resolve_papers(self, titles: list[str], limit_each: int = 3, min_delay: float = 1.0) -> list[dict[str, Any]]:
         """
